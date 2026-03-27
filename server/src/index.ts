@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import path from 'path';
 
 dotenv.config();
 
@@ -40,6 +41,18 @@ import { getTeamsAccessToken, createMigrationChannel, addMigrationMessage, compl
 import { formatTeamsMigrationMessage } from './normalize.js';
 import { downloadWebexFile, saveJson } from './downloader.js';
 
+async function getWebexEmail(token: string): Promise<string> {
+  try {
+    const response = await axios.get('https://webexapis.com/v1/people/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data.emails[0];
+  } catch (error) {
+    console.error('Failed to fetch Webex email:', error);
+    return 'unknown_user';
+  }
+}
+
 // Webex Download All Endpoint
 app.post('/api/webex/download-all', async (req, res) => {
   const { token } = req.body;
@@ -51,10 +64,13 @@ app.post('/api/webex/download-all', async (req, res) => {
     });
     const rooms = roomsResponse.data.items;
 
+    const userEmail = await getWebexEmail(token);
     const report = [];
 
     for (const room of rooms) {
       const roomId = room.id;
+      const roomTitle = room.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const relativeDir = path.join(userEmail, `${roomTitle}_${roomId}`);
       
       // 2. Fetch messages for the room
       const msgResponse = await axios.get(`https://webexapis.com/v1/messages?roomId=${roomId}&max=100`, {
@@ -63,7 +79,7 @@ app.post('/api/webex/download-all', async (req, res) => {
       const messages = msgResponse.data.items;
 
       // 3. Save messages JSON
-      await saveJson(roomId, messages, 'messages.json');
+      await saveJson(relativeDir, messages, 'messages.json');
 
       // 4. Download attachments
       let downloadedCount = 0;
@@ -71,7 +87,7 @@ app.post('/api/webex/download-all', async (req, res) => {
         if (msg.files && msg.files.length > 0) {
           for (const fileUrl of msg.files) {
             try {
-              await downloadWebexFile(token, fileUrl, roomId);
+              await downloadWebexFile(token, fileUrl, relativeDir);
               downloadedCount++;
             } catch (err) {
               console.error(`Error downloading ${fileUrl}:`, err);
@@ -84,7 +100,8 @@ app.post('/api/webex/download-all', async (req, res) => {
         room: room.title,
         roomId: roomId,
         messagesCount: messages.length,
-        attachmentsCount: downloadedCount
+        attachmentsCount: downloadedCount,
+        path: relativeDir
       });
     }
 
@@ -115,6 +132,9 @@ app.post('/api/teams/migrate', async (req, res) => {
     });
     const messages = webexResponse.data.items.reverse(); // Migration API requires chronological order
 
+    const userEmail = await getWebexEmail(webexToken);
+    const relativeDir = path.join(userEmail, roomId);
+
     // 3. Create Migration Channel
     const channel = await createMigrationChannel(teamsToken, teamId, channelName);
     const channelId = channel.id;
@@ -126,7 +146,7 @@ app.post('/api/teams/migrate', async (req, res) => {
       if (options?.downloadLocal && msg.files && msg.files.length > 0) {
         for (const fileUrl of msg.files) {
           try {
-            await downloadWebexFile(webexToken, fileUrl, roomId);
+            await downloadWebexFile(webexToken, fileUrl, relativeDir);
             console.log(`Downloaded file from message ${msg.id}`);
           } catch (err: any) {
              console.error(`Failed to download file from message ${msg.id}: ${err.message}`);

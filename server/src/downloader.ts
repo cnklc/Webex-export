@@ -10,8 +10,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export async function downloadWebexFile(token: string, fileUrl: string, roomId: string): Promise<string> {
-  const baseDir = path.resolve(__dirname, '../../downloads', roomId);
+export async function downloadWebexFile(token: string, fileUrl: string, relativeDir: string): Promise<string> {
+  const baseDir = path.resolve(__dirname, '../../downloads', relativeDir);
   if (!fs.existsSync(baseDir)) {
     fs.mkdirSync(baseDir, { recursive: true });
   }
@@ -56,8 +56,8 @@ export async function downloadWebexFile(token: string, fileUrl: string, roomId: 
   });
 }
 
-export async function saveJson(roomId: string, data: any, filename: string): Promise<string> {
-  const baseDir = path.resolve(__dirname, '../../downloads', roomId);
+export async function saveJson(relativeDir: string, data: any, filename: string): Promise<string> {
+  const baseDir = path.resolve(__dirname, '../../downloads', relativeDir);
   if (!fs.existsSync(baseDir)) {
     fs.mkdirSync(baseDir, { recursive: true });
   }
