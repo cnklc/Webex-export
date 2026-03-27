@@ -9,7 +9,8 @@ import {
   AlertCircle,
   Loader2,
   Lock,
-  MessageCircle
+  MessageCircle,
+  Download
 } from 'lucide-react';
 
 type Step = 'connect' | 'select' | 'configure' | 'migrate';
@@ -26,8 +27,10 @@ function App() {
   const [webexToken, setWebexToken] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [downloadLocal, setDownloadLocal] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [migrationResults, setMigrationResults] = useState<any>(null);
 
   const fetchRooms = async () => {
     if (!webexToken) return;
@@ -48,6 +51,65 @@ function App() {
       }
     } catch (err) {
       setError('Connection refused. Is the server running?');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startMigration = async () => {
+    if (!selectedRoom) return;
+    setIsLoading(true);
+    setError(null);
+    setStep('migrate');
+    try {
+      const response = await fetch('http://localhost:3001/api/teams/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          webexToken, 
+          roomId: selectedRoom.id,
+          teamsConfig: {
+            tenantId: '00000000-0000-0000-0000-000000000000', 
+            clientId: '00000000-0000-0000-0000-000000000000',
+            clientSecret: 'SECRET'
+          },
+          teamId: 'TEAM_ID',
+          channelName: 'Webex Import',
+          options: {
+            downloadLocal: downloadLocal
+          }
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMigrationResults(data);
+      } else {
+        setError(data.message || 'Migration failed');
+      }
+    } catch (err) {
+      setError('Migration failed. Check server logs.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const downloadAll = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:3001/api/webex/download-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: webexToken })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert('Bulk download complete! Check the server downloads folder.');
+      } else {
+        setError(data.message || 'Bulk download failed');
+      }
+    } catch (err) {
+      setError('Communication error with server');
     } finally {
       setIsLoading(false);
     }
@@ -113,15 +175,6 @@ function App() {
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Continue <ArrowRight className="w-5 h-5" /></>}
             </button>
-
-            <div className="p-4 bg-surface-color rounded-xl">
-              <h3 className="text-sm font-semibold mb-2">How to get a Token?</h3>
-              <ul className="text-xs text-text-secondary list-disc pl-4 flex flex-col gap-1">
-                <li>Go to <a href="#" className="text-primary-color underline">Webex for Developers</a></li>
-                <li>Create a "Bot" app and copy the Access Token.</li>
-                <li>Ensure the Bot is added as a member in the spaces you want to migrate.</li>
-              </ul>
-            </div>
           </div>
         )}
 
@@ -132,12 +185,22 @@ function App() {
                  <MessageSquare className="text-primary-color w-6 h-6" />
                  <h2 className="text-xl font-bold">Select a Space</h2>
                </div>
-               <button 
-                 className="p-2 hover:bg-surface-color rounded-lg text-text-secondary"
-                 onClick={() => setStep('connect')}
-               >
-                 Change Token
-               </button>
+               <div className="flex gap-2">
+                  <button 
+                    className="p-2 px-4 bg-primary-color/10 hover:bg-primary-color/20 rounded-lg text-primary-color text-xs font-bold border border-primary-color/20 flex items-center gap-2"
+                    onClick={downloadAll}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Download className="w-3 h-3"/>}
+                    Download All
+                  </button>
+                  <button 
+                    className="p-2 hover:bg-surface-color rounded-lg text-text-secondary text-xs"
+                    onClick={() => setStep('connect')}
+                  >
+                    Change Token
+                  </button>
+               </div>
             </div>
 
             <div className="max-h-96 overflow-y-auto pr-2 flex flex-col gap-3 custom-scrollbar">
@@ -148,7 +211,7 @@ function App() {
                   onClick={() => setSelectedRoom(room)}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-color to-accent-color flex items-center justify-center font-bold">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-color to-accent-color flex items-center justify-center font-bold text-white">
                       {room.title.charAt(0)}
                     </div>
                     <div>
@@ -196,8 +259,8 @@ function App() {
                 <input type="password" className="input-field" placeholder="••••••••••••••••" />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-xs uppercase font-bold text-text-secondary">Team Name</label>
-                <input className="input-field" placeholder="Acme Logistics" />
+                <label className="text-xs uppercase font-bold text-text-secondary">Team ID</label>
+                <input className="input-field" placeholder="00000000-0000-0000..." />
               </div>
                <div className="flex flex-col gap-2">
                 <label className="text-xs uppercase font-bold text-text-secondary">Channel Name</label>
@@ -205,18 +268,21 @@ function App() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 p-4 bg-surface-color rounded-xl border border-white/5">
-              <h3 className="text-sm font-semibold">Migration Options</h3>
+            <div className="flex flex-col gap-4 p-4 bg-surface-color rounded-xl border border-white/5">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Download className="w-4 h-4 text-primary-color" /> 
+                Sample Data Options
+              </h3>
               <div className="flex items-center justify-between">
-                <div className="text-sm">Download & Re-upload Attachments</div>
-                <div className="w-12 h-6 bg-primary-color rounded-full relative p-1 cursor-pointer">
-                  <div className="w-4 h-4 bg-white rounded-full absolute right-1" />
+                <div className="flex flex-col">
+                  <span className="text-sm">Save Attachments Locally</span>
+                  <span className="text-[10px] text-text-secondary">Saves files to server's /downloads folder</span>
                 </div>
-              </div>
-               <div className="flex items-center justify-between">
-                <div className="text-sm">Normalize Mentions (@mention)</div>
-                <div className="w-12 h-6 bg-primary-color rounded-full relative p-1 cursor-pointer">
-                  <div className="w-4 h-4 bg-white rounded-full absolute right-1" />
+                <div 
+                  className={`w-12 h-6 rounded-full relative p-1 cursor-pointer transition-colors ${downloadLocal ? 'bg-success-color' : 'bg-white/10'}`}
+                  onClick={() => setDownloadLocal(!downloadLocal)}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full transition-all ${downloadLocal ? 'translate-x-6' : 'translate-x-0'}`} />
                 </div>
               </div>
             </div>
@@ -230,7 +296,7 @@ function App() {
               </button>
               <button 
                 className="flex-[2] btn-primary"
-                onClick={() => setStep('migrate')}
+                onClick={startMigration}
               >
                 Start Migration Phase
               </button>
@@ -242,41 +308,62 @@ function App() {
           <div className="glass-panel p-8 card flex flex-col gap-8">
             <div className="flex flex-col items-center gap-4 text-center">
               <div className="w-20 h-20 rounded-full bg-primary-color/10 flex items-center justify-center relative">
-                 <div className="absolute inset-0 rounded-full border-4 border-primary-color/20" />
-                 <div className="absolute inset-0 rounded-full border-4 border-primary-color border-r-transparent animate-spin" />
-                 <UploadCloud className="w-10 h-10 text-primary-color" />
+                 {!migrationResults && !error && (
+                   <div className="absolute inset-0 rounded-full border-4 border-primary-color border-r-transparent animate-spin" />
+                 )}
+                 {migrationResults ? (
+                   <CheckCircle2 className="w-10 h-10 text-success-color" />
+                 ) : error ? (
+                   <AlertCircle className="w-10 h-10 text-error-color" />
+                 ) : (
+                   <UploadCloud className="w-10 h-10 text-primary-color" />
+                 )}
               </div>
               <div>
-                <h2 className="text-2xl font-extrabold">Migrating...</h2>
-                <p className="text-text-secondary mt-1">Transferring {selectedRoom?.title} history</p>
+                <h2 className="text-2xl font-extrabold">
+                  {migrationResults ? 'Migration Complete' : error ? 'Migration Failed' : 'Migrating...'}
+                </h2>
+                <p className="text-text-secondary mt-1">
+                  {migrationResults ? `${migrationResults.results.length} messages transferred` : `Transferring ${selectedRoom?.title} history`}
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-sm">
-                <span>Total Progress</span>
-                <span className="text-primary-color font-bold">42%</span>
+            {!migrationResults && !error && (
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between text-sm">
+                  <span>Total Progress</span>
+                  <span className="text-primary-color font-bold">In Progress</span>
+                </div>
+                <div className="w-full h-3 bg-surface-color rounded-full overflow-hidden border border-white/5">
+                  <div className="h-full bg-gradient-to-r from-primary-color to-accent-color w-[60%] animate-pulse" />
+                </div>
               </div>
-              <div className="w-full h-3 bg-surface-color rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-gradient-to-r from-primary-color to-accent-color w-[42%] transition-all duration-1000" />
-              </div>
-            </div>
+            )}
 
             <div className="bg-black/40 rounded-xl p-4 font-mono text-xs flex flex-col gap-2 border border-white/5 h-48 overflow-y-auto custom-scrollbar">
                <div className="text-success-color">[INFO] Starting migration process...</div>
-               <div className="text-text-secondary">[INFO] Authorized with Microsoft Graph API</div>
-               <div className="text-text-secondary">[INFO] Created team: Acme Logistics</div>
-               <div className="text-text-secondary">[INFO] Target channel "Webex Import" locked in Migration Mode</div>
-               <div className="text-text-secondary">[INFO] Fetching 1,240 messages from Webex Space...</div>
-               <div className="text-white">→ Uploading batch 1/13 (100 messages)</div>
-               <div className="text-white">→ Uploading batch 2/13 (100 messages)</div>
-               <div className="text-primary-color">→ Normalizing attachments: file_abc.pdf</div>
-               <div className="text-text-secondary">... Waiting for server response ...</div>
+               {downloadLocal && <div className="text-primary-color">[INFO] Local download enabled: saving to /downloads/{selectedRoom?.id}</div>}
+               {isLoading && <div className="text-text-secondary animate-pulse">[INFO] Processing batches ...</div>}
+               {migrationResults && (
+                 <>
+                   <div className="text-success-color">[SUCCESS] Migration finalized.</div>
+                   <div className="text-text-secondary">[INFO] Channel lock removed.</div>
+                 </>
+               )}
+               {error && <div className="text-error-color">[ERROR] {error}</div>}
             </div>
 
             <div className="flex gap-4">
-               <button className="flex-1 p-3 border border-border-color rounded-xl hover:bg-surface-color text-error-color font-semibold">
-                 Abort Migration
+               <button 
+                 className="flex-1 p-3 border border-border-color rounded-xl hover:bg-surface-color font-semibold"
+                 onClick={() => {
+                   setStep('connect');
+                   setMigrationResults(null);
+                   setError(null);
+                 }}
+               >
+                 {migrationResults || error ? 'Start New Migration' : 'Abort Migration'}
                </button>
             </div>
           </div>
