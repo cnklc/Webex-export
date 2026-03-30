@@ -112,24 +112,34 @@ function App() {
     if (roomsToDownload.length === 0 || !webexToken) return;
     setIsLoading(true);
     setError(null);
+    setDownloadProgress({ current: 1, total: 100, status: 'Arşivleme başlatılıyor...' });
     setStep('download');
 
     try {
       const zip = new JSZip();
-      
-      for (let i = 0; i < roomsToDownload.length; i++) {
-        const room = roomsToDownload[i];
-        setDownloadProgress({
-          current: Math.round((i / roomsToDownload.length) * 100),
-          total: 100,
-          status: `Arşivleniyor (${i + 1}/${roomsToDownload.length}): ${room.title}`
-        });
 
+      // Progress bands per room: messages = 5–80%, files = 80–95%
+      const roomCount = roomsToDownload.length;
+
+      for (let i = 0; i < roomCount; i++) {
+        const room = roomsToDownload[i];
+
+        // --- Mesaj çekme aşaması ---
         const messages: any[] = [];
+        let pageIndex = 0;
         for await (const pagedMessages of WebexService.getMessagesPaged(webexToken, room.id)) {
           messages.push(...pagedMessages);
+          pageIndex++;
+          // Animate progress between 5% and 75% while fetching pages
+          const fetchedSoFar = Math.min(5 + pageIndex * 8, 75);
+          setDownloadProgress({
+            current: fetchedSoFar,
+            total: 100,
+            status: `Mesajlar alınıyor (${i + 1}/${roomCount}): ${room.title} — ${messages.length} mesaj`
+          });
         }
 
+        // --- Dosya indirme aşaması ---
         const downloadedFiles: { name: string, blob: Blob }[] = [];
         const fileUrls: string[] = [];
         messages.forEach(msg => msg.files?.forEach((f: string) => fileUrls.push(f)));
@@ -143,6 +153,11 @@ function App() {
           } catch (e) {
             console.error('Dosya indirme hatası:', fileUrl);
           }
+          setDownloadProgress({
+            current: Math.round(75 + ((j + 1) / Math.max(fileUrls.length, 1)) * 20),
+            total: 100,
+            status: `Dosyalar indiriliyor (${j + 1}/${fileUrls.length}): ${room.title}`
+          });
         }
 
         // Add room data to ZIP immediately and clear local references
