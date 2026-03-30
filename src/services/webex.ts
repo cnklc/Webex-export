@@ -47,13 +47,26 @@ export const WebexService = {
     return data.items;
   },
 
-  async getMessages(token: string, roomId: string, max = 100): Promise<WebexMessage[]> {
-    const response = await fetch(`${BASE_URL}/messages?roomId=${roomId}&max=${max}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!response.ok) throw new Error('Failed to fetch messages');
-    const data = await response.json();
-    return data.items;
+  async getMessages(token: string, roomId: string): Promise<WebexMessage[]> {
+    let messages: WebexMessage[] = [];
+    let nextUrl: string | null = `${BASE_URL}/messages?roomId=${roomId}&max=1000`;
+
+    while (nextUrl) {
+      const response: Response = await fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      
+      const data = await response.json();
+      messages = [...messages, ...data.items];
+
+      // Webex pagination uses Link header
+      const linkHeader = response.headers.get('Link');
+      const nextMatch = linkHeader ? linkHeader.match(/<([^>]+)>;\s*rel="next"/) : null;
+      nextUrl = nextMatch ? nextMatch[1] : null;
+    }
+
+    return messages;
   },
 
   async downloadFile(token: string, fileUrl: string): Promise<Blob> {

@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
+import { WebexService, type WebexRoom } from './services/webex';
+import { downloadBlob } from './utils/downloadUtils';
+import { createRoomZip, createBulkZip } from './utils/zipUtils';
+import { MessageViewer } from './components/MessageViewer';
+import { 
+  Archive as ArchiveIcon, 
+  Search, 
+  FileJson, 
   Shield,
   ArrowRight,
   MessageSquare,
@@ -16,13 +23,11 @@ import {
   User,
   Copy,
   ClipboardPaste,
-  ChevronLeft
+  ChevronLeft,
+  Home
 } from 'lucide-react';
-import { WebexService, type WebexRoom } from './services/webex';
-import { downloadBlob } from './utils/downloadUtils';
-import { createRoomZip, createBulkZip } from './utils/zipUtils';
 
-type Step = 'connect' | 'select' | 'download' | 'guide';
+type Step = 'connect' | 'select' | 'download' | 'guide' | 'viewer';
 
 const pageVariants = {
   initial: { opacity: 0, scale: 0.98 },
@@ -38,6 +43,15 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, status: '' });
+  const [importedMessages, setImportedMessages] = useState<any[]>([]);
+  const [archiveTitle, setArchiveTitle] = useState('');
+  const [userEmail, setUserEmail] = useState(() => localStorage.getItem('webex_user_email') || '');
+
+  // Persist email to localStorage
+  const handleEmailChange = (email: string) => {
+    setUserEmail(email);
+    localStorage.setItem('webex_user_email', email);
+  };
 
   const fetchRooms = async () => {
     if (!webexToken) return;
@@ -151,15 +165,51 @@ function App() {
     }
   };
 
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (Array.isArray(json)) {
+          setImportedMessages(json);
+          setArchiveTitle(file.name.replace('.json', ''));
+          setStep('viewer');
+          setError(null);
+        } else {
+          throw new Error('Invalid JSON format. Expected an array of messages.');
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to parse JSON');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="flex flex-col items-center p-8 w-full min-h-screen">
       <div style={{ position: 'fixed', top: '-10%', left: '-10%', width: '40%', height: '40%', backgroundColor: 'var(--primary-glow)', borderRadius: '50%', filter: 'blur(120px)', opacity: 0.15, pointerEvents: 'none' }} />
       <div style={{ position: 'fixed', bottom: '-10%', right: '-10%', width: '40%', height: '40%', backgroundColor: 'var(--accent-glow)', borderRadius: '50%', filter: 'blur(120px)', opacity: 0.15, pointerEvents: 'none' }} />
 
       <header className="flex flex-col items-center w-full max-w-5xl mb-16 gap-8 relative z-10">
-        <div className="flex items-center gap-6">
-          <div className="p-4 glass-panel flex items-center justify-center bg-primary-glow" style={{ width: 'auto' }}>
-            <Archive className="text-white w-10 h-10" />
+        <div 
+          className="flex items-center gap-6 cursor-pointer group hover-scale-101 transition-all" 
+          onClick={() => {
+            setStep('connect');
+            setSelectedRoom(null);
+            setError(null);
+          }}
+          title="Ana Sayfaya Dön"
+        >
+          <div className="p-4 glass-panel flex items-center justify-center bg-primary-glow group-hover-glow-strong" style={{ width: 'auto' }}>
+            <ArchiveIcon className="text-white w-10 h-10" />
+            {step !== 'connect' && (
+              <div className="absolute -bottom-2 -right-2 p-1.5 rounded-full bg-accent-color border border-white-20 shadow-lg">
+                <Home size={12} className="text-white" />
+              </div>
+            )}
           </div>
           <div className="flex flex-col">
             <h1 className="text-white" style={{ fontSize: '2.5rem', fontWeight: 800 }}>Webex<span style={{ color: 'var(--primary-color)' }}>↓</span>Archiver</h1>
@@ -191,6 +241,23 @@ function App() {
               </div>
             );
           })}
+          <div className="mx-4 opacity-10" style={{ width: '20px', height: '1px', backgroundColor: 'var(--text-secondary)' }} />
+          <div 
+            className={`flex items-center gap-3 px-5 py-2.5 transition-all duration-300 cursor-pointer ${step === 'viewer' ? 'active' : ''}`}
+            style={{
+              borderRadius: '35px',
+              backgroundColor: step === 'viewer' ? 'var(--accent-color)' : 'transparent',
+              boxShadow: step === 'viewer' ? '0 0 20px var(--accent-glow)' : 'none',
+              color: step === 'viewer' ? 'white' : 'var(--text-secondary)',
+              opacity: step === 'viewer' ? 1 : 0.5,
+              transform: step === 'viewer' ? 'scale(1.05)' : 'scale(1)',
+              zIndex: step === 'viewer' ? 2 : 1
+            }}
+            onClick={() => { if(importedMessages.length > 0) setStep('viewer'); }}
+          >
+            <Search className="w-4 h-4" />
+            <span style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em' }}>Viewer</span>
+          </div>
         </div>
       </header>
 
@@ -219,7 +286,35 @@ function App() {
                 </div>
                 {error && <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error-color)', fontSize: '14px' }}><AlertCircle className="w-5 h-5" /> {error}</div>}
               </div>
-              <button className="btn-primary" onClick={fetchRooms} disabled={isLoading || !webexToken}>{isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Fetch Spaces <ArrowRight className="w-5 h-5" /></>}</button>
+              <div className="flex flex-col gap-4">
+                <button className="btn-primary" onClick={fetchRooms} disabled={isLoading || !webexToken}>{isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Fetch Spaces <ArrowRight className="w-5 h-5" /></>}</button>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 h-px bg-white-10"></div>
+                  <span className="text-text-secondary text-xs font-bold uppercase tracking-widest">OR</span>
+                  <div className="flex-1 h-px bg-white-10"></div>
+                </div>
+                <div className="flex flex-col gap-4 p-5 rounded-2xl border border-white-5" style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-text-secondary uppercase">Your Email (for Highlight)</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary w-4 h-4" />
+                      <input 
+                        type="email" 
+                        placeholder="example@company.com" 
+                        className="input-field" 
+                        style={{ paddingLeft: '40px', height: '42px', fontSize: '13px' }} 
+                        value={userEmail} 
+                        onChange={(e) => handleEmailChange(e.target.value)} 
+                      />
+                    </div>
+                  </div>
+                  <label className="btn-secondary cursor-pointer flex items-center justify-center gap-3 py-4 rounded-xl border border-white-10 hover-bg-white-5 transition-all w-full">
+                    <FileJson className="w-5 h-5 text-primary-color" />
+                    <span className="text-white font-bold">Import & View JSON</span>
+                    <input type="file" accept=".json" onChange={handleImport} className="hidden" style={{ display: 'none' }} />
+                  </label>
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -335,6 +430,15 @@ function App() {
                 <ChevronLeft className="w-5 h-5" /> Geri Dön
               </button>
             </motion.div>
+          )}
+
+          {step === 'viewer' && (
+            <MessageViewer 
+              messages={importedMessages} 
+              onBack={() => setStep('connect')} 
+              title={archiveTitle}
+              initialEmail={userEmail}
+            />
           )}
         </AnimatePresence>
       </main>
