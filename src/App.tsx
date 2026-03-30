@@ -28,7 +28,12 @@ import {
   Home
 } from 'lucide-react';
 
-type Step = 'connect' | 'select' | 'download' | 'guide' | 'viewer';
+type Step = 'connect' | 'select' | 'download' | 'archive' | 'guide' | 'viewer';
+
+interface ArchivedRoom {
+  room: WebexRoom;
+  messages: any[];
+}
 
 const pageVariants = {
   initial: { opacity: 0, scale: 0.98 },
@@ -44,8 +49,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, status: '' });
-  const [importedMessages, setImportedMessages] = useState<any[]>([]);
-  const [archiveTitle, setArchiveTitle] = useState('');
+  const [archivedRooms, setArchivedRooms] = useState<ArchivedRoom[]>([]);
+  const [selectedArchiveRoom, setSelectedArchiveRoom] = useState<ArchivedRoom | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('webex_user_email') || '');
 
@@ -115,10 +120,10 @@ function App() {
     setDownloadProgress({ current: 1, total: 100, status: 'Arşivleme başlatılıyor...' });
     setStep('download');
 
+    const collectedRooms: ArchivedRoom[] = [];
+
     try {
       const zip = new JSZip();
-
-      // Progress bands per room: messages = 5–80%, files = 80–95%
       const roomCount = roomsToDownload.length;
 
       for (let i = 0; i < roomCount; i++) {
@@ -130,7 +135,6 @@ function App() {
         for await (const pagedMessages of WebexService.getMessagesPaged(webexToken, room.id)) {
           messages.push(...pagedMessages);
           pageIndex++;
-          // Animate progress between 5% and 75% while fetching pages
           const fetchedSoFar = Math.min(5 + pageIndex * 8, 75);
           setDownloadProgress({
             current: fetchedSoFar,
@@ -160,20 +164,22 @@ function App() {
           });
         }
 
-        // Add room data to ZIP immediately and clear local references
         addRoomToZip(zip, room.title, messages, downloadedFiles);
+        // Store in memory for browsing
+        collectedRooms.push({ room, messages });
+        setArchivedRooms([...collectedRooms]);
       }
 
       setDownloadProgress({ current: 98, total: 100, status: 'ZIP dosyası hazırlanıyor...' });
       
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const archiveName = roomsToDownload.length === 1 
+      const archiveName = roomsToDownload.length === 1
         ? `${roomsToDownload[0].title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`
         : `webex_arsivi_${new Date().toISOString().split('T')[0]}.zip`;
-      
       downloadBlob(zipBlob, archiveName);
-      
-      setDownloadProgress({ current: 100, total: 100, status: 'Arşivleme Tamamlandı!' });
+
+      setDownloadProgress({ current: 100, total: 100, status: 'Arşivleme Tamamlandı! Mesajlara göz atabilirsiniz.' });
+      setStep('archive');
     } catch (err: any) {
       setError(err.message || 'Arşivleme başarısız oldu');
       setStep('select');
@@ -185,15 +191,31 @@ function App() {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reset input value so the same file can be re-imported
+    e.target.value = '';
 
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
         if (Array.isArray(json)) {
-          setImportedMessages(json);
-          setArchiveTitle(file.name.replace('.json', ''));
-          setStep('viewer');
+          // Derive title from unique personEmails in the messages
+          const uniqueEmails: string[] = Array.from(
+            new Set(json.map((m: any) => m.personEmail).filter(Boolean))
+          );
+          const title = uniqueEmails.length > 0
+            ? uniqueEmails.slice(0, 3).join(', ') + (uniqueEmails.length > 3 ? ` +${uniqueEmails.length - 3}` : '')
+            : file.name.replace('.json', '');
+
+          const fakeRoom: WebexRoom = {
+            id: 'import_' + Date.now(),
+            title,
+            type: 'import',
+            created: new Date().toISOString()
+          };
+          // Additive: push to existing list instead of replacing
+          setArchivedRooms(prev => [...prev, { room: fakeRoom, messages: json }]);
+          setStep('archive');
           setError(null);
         } else {
           throw new Error('Geçersiz JSON formatı. Mesaj listesi bekleniyor.');
@@ -203,6 +225,11 @@ function App() {
       }
     };
     reader.readAsText(file);
+  };
+
+  const removeArchivedRoom = (id: string) => {
+    setArchivedRooms(prev => prev.filter(ar => ar.room.id !== id));
+    if (selectedArchiveRoom?.room.id === id) setSelectedArchiveRoom(null);
   };
 
   return (
@@ -239,11 +266,17 @@ function App() {
             { id: 'connect', label: 'BAĞLAN', num: 1 },
             { id: 'select', label: 'ALAN SEÇ', num: 2 },
             { id: 'download', label: 'İNDİR', num: 3 },
+            { id: 'archive', label: 'ARŞİV', num: 4 },
             { id: 'viewer', label: 'GÖRÜNTÜLE', icon: <Search className="w-4 h-4" /> }
           ].map((s, i, arr) => {
             const isGuide = step === 'guide' && s.id === 'connect';
             const isActive = step === s.id || isGuide;
-            const isClickable = s.id === 'viewer' ? importedMessages.length > 0 : true;
+            const isClickable =
+              s.id === 'viewer' ? selectedArchiveRoom !== null :
+              s.id === 'archive' ? archivedRooms.length > 0 :
+              s.id === 'connect' ? true :
+              s.id === 'select' ? rooms.length > 0 :
+              s.id === 'download' ? selectedRoomIds.length > 0 : true;
 
             return (
               <div key={s.id} className="flex items-center">
@@ -259,11 +292,12 @@ function App() {
                     zIndex: isActive ? 10 : 1
                   }}
                   onClick={() => {
-                    if (s.id === 'viewer') {
-                      if (importedMessages.length > 0) setStep('viewer');
-                    } else if (s.id === 'connect' || (s.id === 'select' && rooms.length > 0) || (s.id === 'download' && selectedRoomIds.length > 0)) {
-                      setStep(s.id as Step);
-                    }
+                    if (!isClickable) return;
+                    if (s.id === 'viewer' && selectedArchiveRoom) setStep('viewer');
+                    else if (s.id === 'archive' && archivedRooms.length > 0) setStep('archive');
+                    else if (s.id === 'connect') setStep('connect');
+                    else if (s.id === 'select' && rooms.length > 0) setStep('select');
+                    else if (s.id === 'download' && selectedRoomIds.length > 0) setStep('download');
                   }}
                 >
                   <span className="flex items-center justify-center font-bold" style={{
@@ -513,11 +547,107 @@ function App() {
             </motion.div>
           )}
 
-          {step === 'viewer' && (
+          {step === 'archive' && (
+            <motion.div key="archive" variants={pageVariants} initial="initial" animate="enter" exit="exit" className="glass-panel p-10 flex flex-col gap-6 w-full">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Archive className="text-primary-color w-6 h-6" />
+                  <div>
+                    <h2 className="text-white" style={{ fontSize: '1.5rem', fontWeight: 700 }}>Arşiv Listesi</h2>
+                    <p className="text-text-secondary" style={{ fontSize: '13px' }}>{archivedRooms.length} konuşma — görüntülemek için seçin</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {/* Import button always visible on archive page */}
+                  <label
+                    className="btn-primary flex items-center gap-2 cursor-pointer"
+                    style={{ height: '36px', padding: '0 16px', fontSize: '12px', background: 'linear-gradient(135deg, var(--accent-color), #7c3aed)' }}
+                    title="JSON dosyası ekle"
+                  >
+                    <FileJson className="w-4 h-4" />
+                    <span>+ Dosya Ekle</span>
+                    <input type="file" accept=".json" onChange={handleImport} className="hidden" style={{ display: 'none' }} />
+                  </label>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: '12px', color: 'var(--text-secondary)', height: '36px', padding: '0 14px' }}
+                    onClick={() => setStep('select')}
+                  >
+                    <RefreshCw className="w-3 h-3" /> Webex'ten İndir
+                  </button>
+                </div>
+              </div>
+
+              {archivedRooms.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4 text-text-secondary">
+                  <FileJson className="w-12 h-12 opacity-20" />
+                  <p className="text-sm">Henüz konuşma eklenmedi. "+ Dosya Ekle" ile JSON dosyası yükleyin.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 custom-scrollbar" style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '8px' }}>
+                  {archivedRooms.map((ar) => {
+                    const oldest = ar.messages.length > 0 ? new Date(ar.messages[ar.messages.length - 1].created) : null;
+                    const newest = ar.messages.length > 0 ? new Date(ar.messages[0].created) : null;
+                    const dateRange = oldest && newest
+                      ? `${oldest.toLocaleDateString('tr-TR')} – ${newest.toLocaleDateString('tr-TR')}`
+                      : 'Tarih yok';
+
+                    return (
+                      <div
+                        key={ar.room.id}
+                        className="room-card"
+                        style={{ cursor: 'pointer', position: 'relative' }}
+                        onClick={() => {
+                          setSelectedArchiveRoom(ar);
+                          setStep('viewer');
+                        }}
+                      >
+                        {/* Avatar */}
+                        <div className="flex items-center justify-center w-12 h-12 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.05)', fontWeight: 800, color: 'var(--primary-color)', fontSize: '20px', flexShrink: 0 }}>
+                          {ar.room.title.charAt(0).toUpperCase()}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex flex-col flex-1 gap-0.5 min-w-0">
+                          <span className="text-white font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ar.room.title}</span>
+                          <span className="text-text-secondary" style={{ fontSize: '11px', textTransform: 'uppercase' }}>
+                            {ar.messages.length} MESAJ • {ar.room.type === 'group' ? 'GRUP' : ar.room.type === 'import' ? 'JSON IMPORT' : 'BİREYSEL'}
+                          </span>
+                          <span className="text-text-secondary" style={{ fontSize: '11px', opacity: 0.55 }}>{dateRange}</span>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <div
+                            className="px-3 py-1 rounded-full text-xs font-bold"
+                            style={{ background: 'rgba(79,70,229,0.15)', color: 'var(--primary-color)', border: '1px solid var(--primary-glow)', cursor: 'pointer' }}
+                            onClick={() => { setSelectedArchiveRoom(ar); setStep('viewer'); }}
+                          >
+                            Görüntüle →
+                          </div>
+                          <div
+                            className="w-7 h-7 flex items-center justify-center rounded-full"
+                            style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error-color)', border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer', fontSize: '14px', flexShrink: 0 }}
+                            title="Listeden kaldır"
+                            onClick={() => removeArchivedRoom(ar.room.id)}
+                          >
+                            ✕
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {step === 'viewer' && selectedArchiveRoom && (
             <MessageViewer
-              messages={importedMessages}
-              onBack={() => setStep('connect')}
-              title={archiveTitle}
+              messages={selectedArchiveRoom.messages}
+              onBack={() => setStep('archive')}
+              title={selectedArchiveRoom.room.title}
               initialEmail={userEmail}
             />
           )}
