@@ -28,7 +28,11 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({ messages, onBack, 
   const groupedMessages = useMemo(() => {
     const groups: { [key: string]: WebexMessage[] } = {};
     filteredMessages.forEach(msg => {
-      const date = new Date(msg.created).toLocaleDateString();
+      const date = new Date(msg.created).toLocaleDateString('tr-TR', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      });
       if (!groups[date]) groups[date] = [];
       groups[date].push(msg);
     });
@@ -60,8 +64,8 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({ messages, onBack, 
               <Home size={20} className="text-text-secondary" />
             </button>
             <div>
-              <h2 className="text-white text-lg font-bold">{title || 'Message Archive'}</h2>
-              <p className="text-text-secondary text-xs">{messages.length} messages loaded</p>
+              <h2 className="text-white text-lg font-bold">{title || 'Mesaj Arşivi'}</h2>
+              <p className="text-text-secondary text-xs">{messages.length} mesaj yüklendi</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -69,7 +73,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({ messages, onBack, 
               <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
               <input 
                 type="text" 
-                placeholder="Your email (for highlighting)" 
+                placeholder="E-postanız (Vurgulama)" 
                 className="input-field"
                 style={{ height: '36px', padding: '0 12px 0 36px', fontSize: '12px', width: '200px' }}
                 value={myEmail}
@@ -83,7 +87,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({ messages, onBack, 
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" />
           <input 
             type="text" 
-            placeholder="Search messages or senders..." 
+            placeholder="Mesajlarda veya gönderenlerde ara..." 
             className="input-field"
             style={{ paddingLeft: '48px' }}
             value={searchTerm}
@@ -115,7 +119,7 @@ export const MessageViewer: React.FC<MessageViewerProps> = ({ messages, onBack, 
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-text-secondary">
             <Search size={48} className="opacity-20" />
-            <p>No messages found matching your criteria</p>
+            <p>Aradığınız kriterlere uygun mesaj bulunamadı</p>
           </div>
         )}
       </div>

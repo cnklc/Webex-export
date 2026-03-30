@@ -34,7 +34,7 @@ export const WebexService = {
     const response = await fetch(`${BASE_URL}/people/me`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!response.ok) throw new Error('Failed to fetch user profile');
+    if (!response.ok) throw new Error('Kullanıcı profili alınamadı');
     return response.json();
   },
 
@@ -42,7 +42,7 @@ export const WebexService = {
     const response = await fetch(`${BASE_URL}/rooms?max=100`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!response.ok) throw new Error('Failed to fetch rooms');
+    if (!response.ok) throw new Error('Alanlar alınamadı');
     const data = await response.json();
     return data.items;
   },
@@ -55,7 +55,7 @@ export const WebexService = {
       const response: Response = await fetch(nextUrl, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error('Failed to fetch messages');
+      if (!response.ok) throw new Error('Mesajlar alınamadı');
       
       const data = await response.json();
       messages = [...messages, ...data.items];
@@ -73,7 +73,7 @@ export const WebexService = {
     const response = await fetch(fileUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!response.ok) throw new Error('Failed to download file');
+    if (!response.ok) throw new Error('Dosya indirilemedi');
     return response.blob();
   }
 };
