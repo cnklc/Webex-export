@@ -46,6 +46,7 @@ function App() {
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, status: '' });
   const [importedMessages, setImportedMessages] = useState<any[]>([]);
   const [archiveTitle, setArchiveTitle] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('webex_user_email') || '');
 
   // Persist email to localStorage
@@ -82,9 +83,18 @@ function App() {
     setSelectedRoomIds(rooms.map(r => r.id));
   };
 
+  const selectFilteredRooms = () => {
+    const filteredIds = filteredRooms.map(r => r.id);
+    setSelectedRoomIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+  };
+
   const deselectAllRooms = () => {
     setSelectedRoomIds([]);
   };
+
+  const filteredRooms = rooms.filter(room => 
+    room.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const downloadRooms = async (roomsToDownload: WebexRoom[]) => {
     if (roomsToDownload.length === 0 || !webexToken) return;
@@ -324,17 +334,51 @@ function App() {
                   <button className="btn-secondary" style={{ color: 'var(--text-secondary)', fontSize: '12px' }} onClick={deselectAllRooms}><RefreshCw className="w-3 h-3" /> Seçimi Kaldır</button>
                 </div>
               </div>
-              <div className="flex flex-col gap-3 custom-scrollbar" style={{ maxHeight: '380px', overflowY: 'auto', paddingRight: '8px' }}>
-                {rooms.map((room) => {
-                  const isSelected = selectedRoomIds.includes(room.id);
-                  return (
-                    <div key={room.id} className={`room-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleRoomSelection(room.id)}>
-                      <div className="flex items-center justify-center w-12 h-12 rounded-xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', fontWeight: 800, color: 'var(--primary-color)' }}>{room.title.charAt(0)}</div>
-                      <div className="flex flex-col flex-1"><span className="text-white font-bold">{room.title}</span><span className="text-text-secondary" style={{ fontSize: '11px', textTransform: 'uppercase' }}>{room.type === 'group' ? 'GRUP' : 'BİREYSEL'} • {new Date(room.created).toLocaleDateString('tr-TR')}</span></div>
-                      {isSelected && <CheckCircle2 className="text-primary-color w-6 h-6" />}
-                    </div>
-                  );
-                })}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center relative">
+                  <Search className="absolute left-4 w-5 h-5 text-text-secondary" />
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    style={{ paddingLeft: '50px', height: '50px' }} 
+                    placeholder="Alanlarda ara..." 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                  />
+                  {searchTerm && (
+                    <button 
+                      className="absolute right-4 p-1 rounded-full hover:bg-white/10 text-text-secondary"
+                      onClick={() => setSearchTerm('')}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {searchTerm && filteredRooms.length > 0 && (
+                  <div className="flex justify-between items-center px-2">
+                    <span className="text-xs text-text-secondary font-bold uppercase">{filteredRooms.length} sonuç bulundu</span>
+                    <button className="text-xs text-primary-color font-bold hover:underline" onClick={selectFilteredRooms}>Bulunanları Seç</button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 custom-scrollbar" style={{ maxHeight: '330px', overflowY: 'auto', paddingRight: '8px' }}>
+                {filteredRooms.length > 0 ? (
+                  filteredRooms.map((room) => {
+                    const isSelected = selectedRoomIds.includes(room.id);
+                    return (
+                      <div key={room.id} className={`room-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleRoomSelection(room.id)}>
+                        <div className="flex items-center justify-center w-12 h-12 rounded-xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', fontWeight: 800, color: 'var(--primary-color)' }}>{room.title.charAt(0)}</div>
+                        <div className="flex flex-col flex-1"><span className="text-white font-bold">{room.title}</span><span className="text-text-secondary" style={{ fontSize: '11px', textTransform: 'uppercase' }}>{room.type === 'group' ? 'GRUP' : 'BİREYSEL'} • {new Date(room.created).toLocaleDateString('tr-TR')}</span></div>
+                        {isSelected && <CheckCircle2 className="text-primary-color w-6 h-6" />}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-text-secondary gap-4">
+                    <Search className="w-12 h-12 opacity-20" />
+                    <p className="text-sm font-medium">"{searchTerm}" ile eşleşen alan bulunamadı.</p>
+                  </div>
+                )}
               </div>
               <button 
                 className="btn-primary" 
