@@ -1,8 +1,8 @@
 import JSZip from 'jszip';
 
-export const createRoomZip = async (roomTitle: string, messages: any[], files: { name: string, blob: Blob }[]) => {
-  const zip = new JSZip();
-  const folder = zip.folder(roomTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase());
+export const addRoomToZip = (zip: JSZip, roomTitle: string, messages: any[], files: { name: string, blob: Blob }[]) => {
+  const roomFolderName = roomTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const folder = zip.folder(roomFolderName);
 
   if (folder) {
     folder.file('messages.json', JSON.stringify(messages, null, 2));
@@ -16,7 +16,11 @@ export const createRoomZip = async (roomTitle: string, messages: any[], files: {
       }
     }
   }
+};
 
+export const createRoomZip = async (roomTitle: string, messages: any[], files: { name: string, blob: Blob }[]) => {
+  const zip = new JSZip();
+  addRoomToZip(zip, roomTitle, messages, files);
   return zip.generateAsync({ type: 'blob' });
 };
 
@@ -24,19 +28,7 @@ export const createBulkZip = async (roomsData: { roomTitle: string, messages: an
   const zip = new JSZip();
   
   roomsData.forEach(data => {
-    const roomFolder = zip.folder(data.roomTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase());
-    if (roomFolder) {
-      roomFolder.file('messages.json', JSON.stringify(data.messages, null, 2));
-      
-      if (data.files.length > 0) {
-        const attachmentsFolder = roomFolder.folder('attachments');
-        if (attachmentsFolder) {
-          data.files.forEach(file => {
-            attachmentsFolder.file(file.name, file.blob);
-          });
-        }
-      }
-    }
+    addRoomToZip(zip, data.roomTitle, data.messages, data.files);
   });
 
   return zip.generateAsync({ type: 'blob' });

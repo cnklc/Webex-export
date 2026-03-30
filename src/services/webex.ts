@@ -38,8 +38,7 @@ export const WebexService = {
     return response.json();
   },
 
-  async getRooms(token: string): Promise<WebexRoom[]> {
-    let rooms: WebexRoom[] = [];
+  async *getRoomsPaged(token: string): AsyncGenerator<WebexRoom[]> {
     let nextUrl: string | null = `${BASE_URL}/rooms?max=1000`;
 
     while (nextUrl) {
@@ -49,18 +48,23 @@ export const WebexService = {
       if (!response.ok) throw new Error('Alanlar alınamadı');
       
       const data = await response.json();
-      rooms = [...rooms, ...data.items];
+      yield data.items;
 
       const linkHeader: string | null = response.headers.get('Link');
       const nextMatch: RegExpMatchArray | null = linkHeader ? linkHeader.match(/<([^>]+)>;[^>]*rel="next"/) : null;
       nextUrl = nextMatch ? nextMatch[1] : null;
     }
+  },
 
+  async getRooms(token: string): Promise<WebexRoom[]> {
+    let rooms: WebexRoom[] = [];
+    for await (const items of this.getRoomsPaged(token)) {
+      rooms = [...rooms, ...items];
+    }
     return rooms;
   },
 
-  async getMessages(token: string, roomId: string): Promise<WebexMessage[]> {
-    let messages: WebexMessage[] = [];
+  async *getMessagesPaged(token: string, roomId: string): AsyncGenerator<WebexMessage[]> {
     let nextUrl: string | null = `${BASE_URL}/messages?roomId=${roomId}&max=1000`;
 
     while (nextUrl) {
@@ -70,14 +74,19 @@ export const WebexService = {
       if (!response.ok) throw new Error('Mesajlar alınamadı');
       
       const data = await response.json();
-      messages = [...messages, ...data.items];
+      yield data.items;
 
-      // Webex pagination uses Link header
       const linkHeader = response.headers.get('Link');
       const nextMatch = linkHeader ? linkHeader.match(/<([^>]+)>;[^>]*rel="next"/) : null;
       nextUrl = nextMatch ? nextMatch[1] : null;
     }
+  },
 
+  async getMessages(token: string, roomId: string): Promise<WebexMessage[]> {
+    let messages: WebexMessage[] = [];
+    for await (const items of this.getMessagesPaged(token, roomId)) {
+      messages = [...messages, ...items];
+    }
     return messages;
   },
 

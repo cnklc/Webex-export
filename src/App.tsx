@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import JSZip from 'jszip';
 import { WebexService, type WebexRoom } from './services/webex';
 import { downloadBlob } from './utils/downloadUtils';
-import { createRoomZip, createBulkZip } from './utils/zipUtils';
+import { addRoomToZip } from './utils/zipUtils';
 import { MessageViewer } from './components/MessageViewer';
 import {
   Archive as ArchiveIcon,
@@ -92,7 +93,8 @@ function App() {
     setStep('download');
 
     try {
-      const roomsData: any[] = [];
+      const zip = new JSZip();
+      
       for (let i = 0; i < roomsToDownload.length; i++) {
         const room = roomsToDownload[i];
         setDownloadProgress({
@@ -101,14 +103,17 @@ function App() {
           status: `Arşivleniyor (${i + 1}/${roomsToDownload.length}): ${room.title}`
         });
 
-        const messages = await WebexService.getMessages(webexToken, room.id);
+        const messages: any[] = [];
+        for await (const pagedMessages of WebexService.getMessagesPaged(webexToken, room.id)) {
+          messages.push(...pagedMessages);
+        }
+
         const downloadedFiles: { name: string, blob: Blob }[] = [];
+        const fileUrls: string[] = [];
+        messages.forEach(msg => msg.files?.forEach((f: string) => fileUrls.push(f)));
 
-        const roomFiles: string[] = [];
-        messages.forEach(msg => msg.files?.forEach(f => roomFiles.push(f)));
-
-        for (let j = 0; j < roomFiles.length; j++) {
-          const fileUrl = roomFiles[j];
+        for (let j = 0; j < fileUrls.length; j++) {
+          const fileUrl = fileUrls[j];
           try {
             const fileName = fileUrl.split('/').pop() || `dosya_${Date.now()}_${j}`;
             const blob = await WebexService.downloadFile(webexToken, fileUrl);
@@ -118,24 +123,18 @@ function App() {
           }
         }
 
-        roomsData.push({
-          roomTitle: room.title,
-          messages,
-          files: downloadedFiles
-        });
+        // Add room data to ZIP immediately and clear local references
+        addRoomToZip(zip, room.title, messages, downloadedFiles);
       }
 
       setDownloadProgress({ current: 98, total: 100, status: 'ZIP dosyası hazırlanıyor...' });
       
-      if (roomsToDownload.length === 1) {
-        const room = roomsData[0];
-        const zipBlob = await createRoomZip(room.roomTitle, room.messages, room.files);
-        const fileName = `${room.roomTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`;
-        downloadBlob(zipBlob, fileName);
-      } else {
-        const masterZipBlob = await createBulkZip(roomsData);
-        downloadBlob(masterZipBlob, `webex_arsivi_${new Date().toISOString().split('T')[0]}.zip`);
-      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const archiveName = roomsToDownload.length === 1 
+        ? `${roomsToDownload[0].title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`
+        : `webex_arsivi_${new Date().toISOString().split('T')[0]}.zip`;
+      
+      downloadBlob(zipBlob, archiveName);
       
       setDownloadProgress({ current: 100, total: 100, status: 'Arşivleme Tamamlandı!' });
     } catch (err: any) {
