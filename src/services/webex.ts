@@ -39,12 +39,24 @@ export const WebexService = {
   },
 
   async getRooms(token: string): Promise<WebexRoom[]> {
-    const response = await fetch(`${BASE_URL}/rooms?max=100`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!response.ok) throw new Error('Alanlar alınamadı');
-    const data = await response.json();
-    return data.items;
+    let rooms: WebexRoom[] = [];
+    let nextUrl: string | null = `${BASE_URL}/rooms?max=1000`;
+
+    while (nextUrl) {
+      const response: Response = await fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Alanlar alınamadı');
+      
+      const data = await response.json();
+      rooms = [...rooms, ...data.items];
+
+      const linkHeader: string | null = response.headers.get('Link');
+      const nextMatch: RegExpMatchArray | null = linkHeader ? linkHeader.match(/<([^>]+)>;[^>]*rel="next"/) : null;
+      nextUrl = nextMatch ? nextMatch[1] : null;
+    }
+
+    return rooms;
   },
 
   async getMessages(token: string, roomId: string): Promise<WebexMessage[]> {
@@ -62,7 +74,7 @@ export const WebexService = {
 
       // Webex pagination uses Link header
       const linkHeader = response.headers.get('Link');
-      const nextMatch = linkHeader ? linkHeader.match(/<([^>]+)>;\s*rel="next"/) : null;
+      const nextMatch = linkHeader ? linkHeader.match(/<([^>]+)>;[^>]*rel="next"/) : null;
       nextUrl = nextMatch ? nextMatch[1] : null;
     }
 

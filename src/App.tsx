@@ -39,7 +39,7 @@ function App() {
   const [step, setStep] = useState<Step>('connect');
   const [webexToken, setWebexToken] = useState('');
   const [rooms, setRooms] = useState<WebexRoom[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<WebexRoom | null>(null);
+  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0, status: '' });
@@ -60,6 +60,7 @@ function App() {
     try {
       const roomsData = await WebexService.getRooms(webexToken);
       setRooms(roomsData);
+      setSelectedRoomIds([]);
       setStep('select');
     } catch (err: any) {
       setError(err.message || 'Alanlar alınamadı. Token\'ınızı kontrol edin.');
@@ -68,81 +69,52 @@ function App() {
     }
   };
 
-  const downloadSelectedRoom = async () => {
-    if (!selectedRoom || !webexToken) return;
-    setIsLoading(true);
-    setError(null);
-    setStep('download');
-
-    try {
-      setDownloadProgress({ current: 0, total: 100, status: 'Mesajlar getiriliyor...' });
-      const messages = await WebexService.getMessages(webexToken, selectedRoom.id);
-
-      const filesToDownload: { url: string, name: string }[] = [];
-      messages.forEach(msg => {
-        if (msg.files) {
-          msg.files.forEach((fileUrl, index) => {
-            const fileName = fileUrl.split('/').pop() || `dosya_${msg.id}_${index}`;
-            filesToDownload.push({ url: fileUrl, name: fileName });
-          });
-        }
-      });
-
-      const downloadedFiles: { name: string, blob: Blob }[] = [];
-      for (let i = 0; i < filesToDownload.length; i++) {
-        setDownloadProgress({
-          current: Math.round(((i + 1) / filesToDownload.length) * 100),
-          total: 100,
-          status: `Dosya indiriliyor: ${i + 1} / ${filesToDownload.length}`
-        });
-        const blob = await WebexService.downloadFile(webexToken, filesToDownload[i].url);
-        downloadedFiles.push({ name: filesToDownload[i].name, blob });
-      }
-
-      setDownloadProgress({ current: 95, total: 100, status: 'ZIP oluşturuluyor...' });
-      const zipBlob = await createRoomZip(selectedRoom.title, messages, downloadedFiles);
-      const fileName = `${selectedRoom.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`;
-      downloadBlob(zipBlob, fileName);
-
-      setDownloadProgress({ current: 100, total: 100, status: 'Dışa Aktarma Tamamlandı!' });
-    } catch (err: any) {
-      setError(err.message || 'Veriler indirilemedi');
-      setStep('select');
-    } finally {
-      setIsLoading(false);
-    }
+  const toggleRoomSelection = (roomId: string) => {
+    setSelectedRoomIds(prev =>
+      prev.includes(roomId)
+        ? prev.filter(id => id !== roomId)
+        : [...prev, roomId]
+    );
   };
 
-  const downloadAll = async () => {
-    if (!webexToken || rooms.length === 0) return;
+  const selectAllRooms = () => {
+    setSelectedRoomIds(rooms.map(r => r.id));
+  };
+
+  const deselectAllRooms = () => {
+    setSelectedRoomIds([]);
+  };
+
+  const downloadRooms = async (roomsToDownload: WebexRoom[]) => {
+    if (roomsToDownload.length === 0 || !webexToken) return;
     setIsLoading(true);
     setError(null);
     setStep('download');
 
     try {
       const roomsData: any[] = [];
-      for (let i = 0; i < rooms.length; i++) {
-        const room = rooms[i];
+      for (let i = 0; i < roomsToDownload.length; i++) {
+        const room = roomsToDownload[i];
         setDownloadProgress({
-          current: Math.round((i / rooms.length) * 100),
+          current: Math.round((i / roomsToDownload.length) * 100),
           total: 100,
-          status: `Arşivleniyor: ${room.title}`
+          status: `Arşivleniyor (${i + 1}/${roomsToDownload.length}): ${room.title}`
         });
 
         const messages = await WebexService.getMessages(webexToken, room.id);
         const downloadedFiles: { name: string, blob: Blob }[] = [];
 
-        // Attachment download for bulk can be heavy, let's just do it for now
         const roomFiles: string[] = [];
         messages.forEach(msg => msg.files?.forEach(f => roomFiles.push(f)));
 
-        for (const fileUrl of roomFiles) {
+        for (let j = 0; j < roomFiles.length; j++) {
+          const fileUrl = roomFiles[j];
           try {
-            const fileName = fileUrl.split('/').pop() || `dosya_${Date.now()}`;
+            const fileName = fileUrl.split('/').pop() || `dosya_${Date.now()}_${j}`;
             const blob = await WebexService.downloadFile(webexToken, fileUrl);
             downloadedFiles.push({ name: fileName, blob });
           } catch (e) {
-            console.error('Toplu indirmede dosya hatası:', fileUrl);
+            console.error('Dosya indirme hatası:', fileUrl);
           }
         }
 
@@ -153,12 +125,21 @@ function App() {
         });
       }
 
-      setDownloadProgress({ current: 98, total: 100, status: 'Ana ZIP dosyası hazırlanıyor...' });
-      const masterZipBlob = await createBulkZip(roomsData);
-      downloadBlob(masterZipBlob, 'webex_arşivi_tam.zip');
-      setDownloadProgress({ current: 100, total: 100, status: 'Toplu Arşivleme Tamamlandı!' });
+      setDownloadProgress({ current: 98, total: 100, status: 'ZIP dosyası hazırlanıyor...' });
+      
+      if (roomsToDownload.length === 1) {
+        const room = roomsData[0];
+        const zipBlob = await createRoomZip(room.roomTitle, room.messages, room.files);
+        const fileName = `${room.roomTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip`;
+        downloadBlob(zipBlob, fileName);
+      } else {
+        const masterZipBlob = await createBulkZip(roomsData);
+        downloadBlob(masterZipBlob, `webex_arsivi_${new Date().toISOString().split('T')[0]}.zip`);
+      }
+      
+      setDownloadProgress({ current: 100, total: 100, status: 'Arşivleme Tamamlandı!' });
     } catch (err: any) {
-      setError(err.message || 'Toplu arşivleme başarısız oldu');
+      setError(err.message || 'Arşivleme başarısız oldu');
       setStep('select');
     } finally {
       setIsLoading(false);
@@ -198,7 +179,7 @@ function App() {
           className="flex items-center gap-5 cursor-pointer group hover-scale-101 transition-all"
           onClick={() => {
             setStep('connect');
-            setSelectedRoom(null);
+            setSelectedRoomIds([]);
             setError(null);
           }}
           title="Ana Sayfaya Dön"
@@ -244,7 +225,7 @@ function App() {
                   onClick={() => {
                     if (s.id === 'viewer') {
                       if (importedMessages.length > 0) setStep('viewer');
-                    } else if (s.id === 'connect' || (s.id === 'select' && rooms.length > 0) || (s.id === 'download' && selectedRoom)) {
+                    } else if (s.id === 'connect' || (s.id === 'select' && rooms.length > 0) || (s.id === 'download' && selectedRoomIds.length > 0)) {
                       setStep(s.id as Step);
                     }
                   }}
@@ -340,20 +321,29 @@ function App() {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3"><MessageSquare className="text-primary-color w-6 h-6" /><h2 className="text-white" style={{ fontSize: '1.5rem', fontWeight: 700 }}>Alan Seçin</h2></div>
                 <div className="flex gap-2">
-                  <button className="btn-primary" style={{ height: '36px', padding: '0 16px', fontSize: '12px' }} onClick={downloadAll}><Archive className="w-3 h-3" /> Tümünü Arşivle</button>
-                  <button className="btn-secondary" style={{ color: 'var(--text-secondary)', fontSize: '12px' }} onClick={() => setStep('connect')}><RefreshCw className="w-3 h-3" /> Sıfırla</button>
+                  <button className="btn-primary" style={{ height: '36px', padding: '0 16px', fontSize: '12px' }} onClick={selectAllRooms}><CheckCircle2 className="w-3 h-3" /> Tümünü Seç</button>
+                  <button className="btn-secondary" style={{ color: 'var(--text-secondary)', fontSize: '12px' }} onClick={deselectAllRooms}><RefreshCw className="w-3 h-3" /> Seçimi Kaldır</button>
                 </div>
               </div>
               <div className="flex flex-col gap-3 custom-scrollbar" style={{ maxHeight: '380px', overflowY: 'auto', paddingRight: '8px' }}>
-                {rooms.map((room) => (
-                  <div key={room.id} className={`room-card ${selectedRoom?.id === room.id ? 'selected' : ''}`} onClick={() => setSelectedRoom(room)}>
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', fontWeight: 800, color: 'var(--primary-color)' }}>{room.title.charAt(0)}</div>
-                    <div className="flex flex-col flex-1"><span className="text-white font-bold">{room.title}</span><span className="text-text-secondary" style={{ fontSize: '11px', textTransform: 'uppercase' }}>{room.type === 'group' ? 'GRUP' : 'BİREYSEL'} • {new Date(room.created).toLocaleDateString('tr-TR')}</span></div>
-                    {selectedRoom?.id === room.id && <CheckCircle2 className="text-primary-color w-6 h-6" />}
-                  </div>
-                ))}
+                {rooms.map((room) => {
+                  const isSelected = selectedRoomIds.includes(room.id);
+                  return (
+                    <div key={room.id} className={`room-card ${isSelected ? 'selected' : ''}`} onClick={() => toggleRoomSelection(room.id)}>
+                      <div className="flex items-center justify-center w-12 h-12 rounded-xl" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', fontWeight: 800, color: 'var(--primary-color)' }}>{room.title.charAt(0)}</div>
+                      <div className="flex flex-col flex-1"><span className="text-white font-bold">{room.title}</span><span className="text-text-secondary" style={{ fontSize: '11px', textTransform: 'uppercase' }}>{room.type === 'group' ? 'GRUP' : 'BİREYSEL'} • {new Date(room.created).toLocaleDateString('tr-TR')}</span></div>
+                      {isSelected && <CheckCircle2 className="text-primary-color w-6 h-6" />}
+                    </div>
+                  );
+                })}
               </div>
-              <button className="btn-primary" onClick={downloadSelectedRoom} disabled={!selectedRoom}>Paketi İndir <Download className="w-5 h-5" /></button>
+              <button 
+                className="btn-primary" 
+                onClick={() => downloadRooms(rooms.filter(r => selectedRoomIds.includes(r.id)))} 
+                disabled={selectedRoomIds.length === 0}
+              >
+                {selectedRoomIds.length > 0 ? `${selectedRoomIds.length} Alanı İndir` : 'Seçilen Paketleri İndir'} <Download className="w-5 h-5" />
+              </button>
             </motion.div>
           )}
 
