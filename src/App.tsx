@@ -202,8 +202,8 @@ function App() {
             )}
           </div>
           <div className="flex flex-col">
-            <h1 className="text-white" style={{ fontSize: '2.5rem', fontWeight: 800 }}>Webex<span style={{ color: 'var(--primary-color)' }}>↓</span>Archiver</h1>
-            <p className="text-text-secondary">Bundled Download Pro</p>
+            <h1 className="text-white" style={{ fontSize: '2.5rem', fontWeight: 800 }}>Webex<span style={{ color: 'var(--primary-color)' }}> </span>Export</h1>
+            <p className="text-text-secondary">Professional Archive Utility</p>
           </div>
         </div>
 
@@ -492,6 +492,14 @@ function App() {
           )}
         </AnimatePresence>
       </main>
+      
+      <footer className="mt-auto py-10 text-text-secondary flex flex-col items-center gap-4 relative z-10 w-full opacity-60">
+        <div className="w-full max-w-[200px] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+        <div className="flex items-center gap-2 font-black tracking-[0.2em] text-[10px] uppercase">
+          <span>Created by</span>
+          <span className="text-primary-color px-2 py-0.5 rounded border border-primary-color/20 bg-primary-color/5">Can</span>
+        </div>
+      </footer>
     </div>
   );
 }

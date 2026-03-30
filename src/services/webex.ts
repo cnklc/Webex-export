@@ -29,12 +29,54 @@ export interface WebexPerson {
 
 const BASE_URL = 'https://webexapis.com/v1';
 
+/**
+ * Handles Webex API limits (429) and transient errors.
+ */
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 5): Promise<Response> {
+  let lastError: any;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await fetch(url, options);
+
+      // Handle Rate Limiting
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '15', 10);
+        console.warn(`Webex API Limiti (429) aşıldı. ${retryAfter} saniye bekleniyor...`);
+        await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000));
+        continue;
+      }
+
+      // Handle transient Server Errors with exponential backoff
+      if (response.status >= 500) {
+        const delay = Math.pow(2, i) * 1000;
+        console.warn(`Webex Sunucu Hatası (${response.status}). ${delay}ms sonra yeniden deneniyor...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      const delay = Math.pow(2, i) * 1000;
+      console.warn(`Webex Ağ Hatası. ${delay}ms sonra yeniden deneniyor...`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  if (lastError) throw lastError;
+  throw new Error('Webex API çağrısı başarısız oldu (Maksimum deneme sayısına ulaşıldı)');
+}
+
 export const WebexService = {
   async getMe(token: string): Promise<WebexPerson> {
-    const response = await fetch(`${BASE_URL}/people/me`, {
+    const response = await fetchWithRetry(`${BASE_URL}/people/me`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!response.ok) throw new Error('Kullanıcı profili alınamadı');
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('Geçersiz Webex Token');
+      throw new Error('Kullanıcı profili alınamadı');
+    }
     return response.json();
   },
 
@@ -42,7 +84,7 @@ export const WebexService = {
     let nextUrl: string | null = `${BASE_URL}/rooms?max=1000`;
 
     while (nextUrl) {
-      const response: Response = await fetch(nextUrl, {
+      const response: Response = await fetchWithRetry(nextUrl, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Alanlar alınamadı');
@@ -68,7 +110,7 @@ export const WebexService = {
     let nextUrl: string | null = `${BASE_URL}/messages?roomId=${roomId}&max=1000`;
 
     while (nextUrl) {
-      const response: Response = await fetch(nextUrl, {
+      const response: Response = await fetchWithRetry(nextUrl, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Mesajlar alınamadı');
@@ -91,7 +133,7 @@ export const WebexService = {
   },
 
   async downloadFile(token: string, fileUrl: string): Promise<Blob> {
-    const response = await fetch(fileUrl, {
+    const response = await fetchWithRetry(fileUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!response.ok) throw new Error('Dosya indirilemedi');
