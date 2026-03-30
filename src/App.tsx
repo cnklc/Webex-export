@@ -73,20 +73,32 @@ function App() {
 
   const toggleRoomSelection = (roomId: string) => {
     setSelectedRoomIds(prev =>
+      prev.includes(roomId) ? [] : [roomId]
+    );
+  };
+/* 
+  // Eski çoklu seçim mantığı (Yorum satırına alındı)
+  const toggleRoomSelectionBulk = (roomId: string) => {
+    setSelectedRoomIds(prev =>
       prev.includes(roomId)
         ? prev.filter(id => id !== roomId)
         : [...prev, roomId]
     );
   };
+*/
 
+/*
   const selectAllRooms = () => {
     setSelectedRoomIds(rooms.map(r => r.id));
   };
+*/
 
+/*
   const selectFilteredRooms = () => {
     const filteredIds = filteredRooms.map(r => r.id);
     setSelectedRoomIds(prev => Array.from(new Set([...prev, ...filteredIds])));
   };
+*/
 
   const deselectAllRooms = () => {
     setSelectedRoomIds([]);
@@ -330,7 +342,9 @@ function App() {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3"><MessageSquare className="text-primary-color w-6 h-6" /><h2 className="text-white" style={{ fontSize: '1.5rem', fontWeight: 700 }}>Alan Seçin</h2></div>
                 <div className="flex gap-2">
+                  {/* Toplu seçim butonları geçici olarak gizlendi
                   <button className="btn-primary" style={{ height: '36px', padding: '0 16px', fontSize: '12px' }} onClick={selectAllRooms}><CheckCircle2 className="w-3 h-3" /> Tümünü Seç</button>
+                  */}
                   <button className="btn-secondary" style={{ color: 'var(--text-secondary)', fontSize: '12px' }} onClick={deselectAllRooms}><RefreshCw className="w-3 h-3" /> Seçimi Kaldır</button>
                 </div>
               </div>
@@ -357,7 +371,9 @@ function App() {
                 {searchTerm && filteredRooms.length > 0 && (
                   <div className="flex justify-between items-center px-2">
                     <span className="text-xs text-text-secondary font-bold uppercase">{filteredRooms.length} sonuç bulundu</span>
+                    {/* 
                     <button className="text-xs text-primary-color font-bold hover:underline" onClick={selectFilteredRooms}>Bulunanları Seç</button>
+                    */}
                   </div>
                 )}
               </div>
@@ -385,7 +401,7 @@ function App() {
                 onClick={() => downloadRooms(rooms.filter(r => selectedRoomIds.includes(r.id)))} 
                 disabled={selectedRoomIds.length === 0}
               >
-                {selectedRoomIds.length > 0 ? `${selectedRoomIds.length} Alanı İndir` : 'Seçilen Paketleri İndir'} <Download className="w-5 h-5" />
+                {selectedRoomIds.length > 0 ? 'Alanı İndir' : 'Alan Seçiniz'} <Download className="w-5 h-5" />
               </button>
             </motion.div>
           )}
