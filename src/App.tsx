@@ -10,13 +10,19 @@ import {
   Lock,
   Download,
   RefreshCw,
-  Archive
+  Archive,
+  Info,
+  ExternalLink,
+  User,
+  Copy,
+  ClipboardPaste,
+  ChevronLeft
 } from 'lucide-react';
 import { WebexService, type WebexRoom } from './services/webex';
 import { downloadBlob } from './utils/downloadUtils';
 import { createRoomZip, createBulkZip } from './utils/zipUtils';
 
-type Step = 'connect' | 'select' | 'download';
+type Step = 'connect' | 'select' | 'download' | 'guide';
 
 const pageVariants = {
   initial: { opacity: 0, scale: 0.98 },
@@ -162,33 +168,43 @@ function App() {
         </div>
 
         <div className="flex glass-panel p-1 items-center justify-center gap-1" style={{ width: 'auto', borderRadius: '40px', background: 'rgba(0, 0, 0, 0.2)', border: '1px solid var(--border-color)' }}>
-          {['connect', 'select', 'download'].map((s, i) => (
-            <div key={s} className="flex items-center">
-              <div
-                className="flex items-center gap-3 px-5 py-2.5 transition-all duration-300"
-                style={{
-                  borderRadius: '35px',
-                  backgroundColor: step === s ? 'var(--primary-color)' : 'transparent',
-                  boxShadow: step === s ? '0 0 20px var(--primary-glow)' : 'none',
-                  color: step === s ? 'white' : 'var(--text-secondary)',
-                  opacity: step === s ? 1 : 0.5,
-                  transform: step === s ? 'scale(1.05)' : 'scale(1)',
-                  zIndex: step === s ? 2 : 1
-                }}
-              >
-                <span className="flex items-center justify-center font-bold" style={{ width: '24px', height: '24px', backgroundColor: step === s ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '50%', fontSize: '11px', border: step === s ? '1px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.1)' }}>{i + 1}</span>
-                <span style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em' }}>{s}</span>
+          {['connect', 'select', 'download'].map((s, i) => {
+            const isActive = step === s || (step === 'guide' && s === 'connect');
+            return (
+              <div key={s} className="flex items-center">
+                <div
+                  className="flex items-center gap-3 px-5 py-2.5 transition-all duration-300"
+                  style={{
+                    borderRadius: '35px',
+                    backgroundColor: isActive ? 'var(--primary-color)' : 'transparent',
+                    boxShadow: isActive ? '0 0 20px var(--primary-glow)' : 'none',
+                    color: isActive ? 'white' : 'var(--text-secondary)',
+                    opacity: isActive ? 1 : 0.5,
+                    transform: isActive ? 'scale(1.05)' : 'scale(1)',
+                    zIndex: isActive ? 2 : 1
+                  }}
+                >
+                  <span className="flex items-center justify-center font-bold" style={{ width: '24px', height: '24px', backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', borderRadius: '50%', fontSize: '11px', border: isActive ? '1px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.1)' }}>{i + 1}</span>
+                  <span style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em' }}>{s}</span>
+                </div>
+                {i < 2 && <div className="mx-4 opacity-10" style={{ width: '20px', height: '1px', backgroundColor: 'var(--text-secondary)' }} />}
               </div>
-              {i < 2 && <div className="mx-4 opacity-10" style={{ width: '20px', height: '1px', backgroundColor: 'var(--text-secondary)' }} />}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </header>
 
       <main className="w-full max-w-2xl flex flex-col items-center relative z-10">
         <AnimatePresence mode="wait">
           {step === 'connect' && (
-            <motion.div key="connect" variants={pageVariants} initial="initial" animate="enter" exit="exit" className="glass-panel p-10 flex flex-col gap-8 w-full">
+            <motion.div key="connect" variants={pageVariants} initial="initial" animate="enter" exit="exit" className="glass-panel p-10 flex flex-col gap-8 w-full relative overflow-hidden">
+              <div 
+                className="absolute top-6 right-6 p-3 rounded-full cursor-pointer hover-bg-white-5 transition-colors border border-white-10 group" 
+                onClick={() => setStep('guide')}
+                title="Nasıl Token Alırım?"
+              >
+                <Info className="w-6 h-6 text-text-secondary group-hover-text-primary" />
+              </div>
               <div className="flex items-center gap-4">
                 <Shield className="text-primary-color w-8 h-8" />
                 <div>
@@ -240,6 +256,84 @@ function App() {
                 <div className="w-full h-2 rounded-full" style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}><motion.div className="h-full rounded-full" style={{ background: 'var(--primary-color)' }} initial={{ width: 0 }} animate={{ width: `${downloadProgress.current}%` }} /></div>
               </div>
               <div className="flex gap-4 w-full"><button className="btn-primary flex-1" onClick={() => setStep('select')} disabled={isLoading}>{isLoading ? 'Packing...' : 'Back to Spaces'}</button></div>
+            </motion.div>
+          )}
+
+          {step === 'guide' && (
+            <motion.div key="guide" variants={pageVariants} initial="initial" animate="enter" exit="exit" className="glass-panel p-10 flex flex-col gap-8 w-full">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl" style={{ border: '1px solid var(--primary-glow)', background: 'rgba(79, 70, 229, 0.1)' }}>
+                    <Info className="text-primary-color w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-white" style={{ fontSize: '1.5rem', fontWeight: 700 }}>Nasıl Token Alırım?</h2>
+                    <p className="text-text-secondary">Token almak için aşağıdaki adımları takip edin.</p>
+                  </div>
+                </div>
+                <button 
+                  className="p-3 rounded-full hover-bg-white-5 border border-white-5 transition-all"
+                  onClick={() => setStep('connect')}
+                >
+                  <ChevronLeft className="w-5 h-5 text-text-secondary" />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                {[
+                  { 
+                    icon: <ExternalLink className="w-5 h-5" />, 
+                    title: "Webex Developer Portal'a Gidin", 
+                    desc: "https://developer.webex.com/docs/getting-your-personal-access-token adresine gidin.",
+                    link: "https://developer.webex.com/docs/getting-your-personal-access-token"
+                  },
+                  { 
+                    icon: <User className="w-5 h-5" />, 
+                    title: "Giriş Yapın", 
+                    desc: "Webex hesabınızla 'Login' butonuna tıklayarak giriş yapın." 
+                  },
+                  { 
+                    icon: <User className="w-5 h-5" />, 
+                    title: "Profil Menüsünü Açın", 
+                    desc: "Sağ üst köşedeki profil ikonuna tıklayın." 
+                  },
+                  { 
+                    icon: <Copy className="w-5 h-5" />, 
+                    title: "Token'ı Kopyalayın", 
+                    desc: "'Bearer' yazısının yanındaki kopyalama (copy) ikonuna tıklayın." 
+                  },
+                  { 
+                    icon: <ClipboardPaste className="w-5 h-5" />, 
+                    title: "Uygulamaya Yapıştırın", 
+                    desc: "Kopyaladığınız token'ı ana sayfadaki giriş alanına yapıştırın." 
+                  }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-4 p-5 rounded-2xl border border-white-5 hover-border-primary transition-all" style={{ background: 'rgba(255, 255, 255, 0.03)' }}>
+                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-primary-glow text-primary-color mt-1">
+                      {item.icon}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <h4 className="text-white font-bold" style={{ fontSize: '15px' }}>{idx + 1}. {item.title}</h4>
+                      <p className="text-text-secondary" style={{ fontSize: '13px', lineHeight: '1.5' }}>{item.desc}</p>
+                      {item.link && (
+                        <a 
+                          href={item.link} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-primary-color flex items-center gap-1.5 mt-2 font-semibold hover-underline"
+                          style={{ fontSize: '13px' }}
+                        >
+                          Adrese Git <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button className="btn-primary" onClick={() => setStep('connect')}>
+                <ChevronLeft className="w-5 h-5" /> Geri Dön
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
