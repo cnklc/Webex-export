@@ -25,7 +25,9 @@ import {
   Copy,
   ClipboardPaste,
   ChevronLeft,
-  Home
+  Home,
+  Pencil,
+  Check
 } from 'lucide-react';
 
 type Step = 'connect' | 'select' | 'download' | 'archive' | 'guide' | 'viewer';
@@ -53,6 +55,8 @@ function App() {
   const [selectedArchiveRoom, setSelectedArchiveRoom] = useState<ArchivedRoom | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showRateWarning, setShowRateWarning] = useState(false);
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('webex_user_email') || '');
 
   // Persist email to localStorage
@@ -231,6 +235,22 @@ function App() {
   const removeArchivedRoom = (id: string) => {
     setArchivedRooms(prev => prev.filter(ar => ar.room.id !== id));
     if (selectedArchiveRoom?.room.id === id) setSelectedArchiveRoom(null);
+  };
+
+  const renameArchivedRoom = (id: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    setArchivedRooms(prev => prev.map(ar =>
+      ar.room.id === id ? { ...ar, room: { ...ar.room, title: newTitle.trim() } } : ar
+    ));
+    if (selectedArchiveRoom?.room.id === id) {
+      setSelectedArchiveRoom(prev => prev ? { ...prev, room: { ...prev.room, title: newTitle.trim() } } : null);
+    }
+  };
+
+  const commitEdit = () => {
+    if (editingRoomId) renameArchivedRoom(editingRoomId, editingTitle);
+    setEditingRoomId(null);
+    setEditingTitle('');
   };
 
   return (
@@ -611,7 +631,42 @@ function App() {
 
                         {/* Info */}
                         <div className="flex flex-col flex-1 gap-0.5 min-w-0">
-                          <span className="text-white font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ar.room.title}</span>
+                          {/* Inline editable title */}
+                          {editingRoomId === ar.room.id ? (
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <input
+                                autoFocus
+                                className="input-field"
+                                style={{ height: '28px', fontSize: '13px', fontWeight: 700, padding: '0 8px', flex: 1 }}
+                                value={editingTitle}
+                                onChange={e => setEditingTitle(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') commitEdit();
+                                  if (e.key === 'Escape') { setEditingRoomId(null); setEditingTitle(''); }
+                                }}
+                                onBlur={commitEdit}
+                              />
+                              <div
+                                className="w-6 h-6 flex items-center justify-center rounded-full"
+                                style={{ background: 'rgba(79,70,229,0.2)', color: 'var(--primary-color)', cursor: 'pointer', flexShrink: 0 }}
+                                onMouseDown={e => { e.preventDefault(); commitEdit(); }}
+                              >
+                                <Check className="w-3 h-3" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 group/title" onClick={e => e.stopPropagation()}>
+                              <span className="text-white font-bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ar.room.title}</span>
+                              <div
+                                className="opacity-0 group-hover/title:opacity-100 transition-opacity cursor-pointer p-0.5 rounded"
+                                style={{ color: 'var(--text-secondary)', flexShrink: 0 }}
+                                title="Başlığı düzenle"
+                                onClick={() => { setEditingRoomId(ar.room.id); setEditingTitle(ar.room.title); }}
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </div>
+                            </div>
+                          )}
                           <span className="text-text-secondary" style={{ fontSize: '11px', textTransform: 'uppercase' }}>
                             {ar.messages.length} MESAJ • {ar.room.type === 'group' ? 'GRUP' : ar.room.type === 'import' ? 'JSON IMPORT' : 'BİREYSEL'}
                           </span>
