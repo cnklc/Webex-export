@@ -217,7 +217,7 @@ function App() {
           </div>
         </div>
 
-        <div className="flex glass-panel p-1.5 items-center justify-center gap-0" style={{ width: 'auto', borderRadius: '40px', background: 'rgba(0, 0, 0, 0.2)', border: '1px solid var(--border-color)' }}>
+        <div className="flex items-center justify-center gap-0" style={{ width: 'auto' }}>
           {[
             { id: 'connect', label: 'BAĞLAN', num: 1 },
             { id: 'select', label: 'ALAN SEÇ', num: 2 },
@@ -231,13 +231,14 @@ function App() {
             return (
               <div key={s.id} className="flex items-center">
                 <div
-                  className={`flex items-center gap-3 px-10 py-2.5 transition-all duration-300 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                  className={`flex items-center gap-3 px-8 py-2.5 transition-all duration-300 ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed'} ${!isActive ? 'glass-panel' : ''}`}
                   style={{
                     borderRadius: '35px',
-                    backgroundColor: isActive ? (s.id === 'viewer' ? 'var(--accent-color)' : 'var(--primary-color)') : 'transparent',
+                    backgroundColor: isActive ? (s.id === 'viewer' ? 'var(--accent-color)' : 'var(--primary-color)') : 'rgba(255, 255, 255, 0.03)',
                     boxShadow: isActive ? `0 0 20px ${s.id === 'viewer' ? 'var(--accent-glow)' : 'var(--primary-glow)'}` : 'none',
+                    border: isActive ? 'none' : '1px solid var(--border-color)',
                     color: isActive ? 'white' : 'var(--text-secondary)',
-                    opacity: isActive ? 1 : (isClickable ? 0.8 : 0.4),
+                    opacity: isActive ? 1 : (isClickable ? 0.9 : 0.4),
                     zIndex: isActive ? 10 : 1
                   }}
                   onClick={() => {
@@ -251,17 +252,17 @@ function App() {
                   <span className="flex items-center justify-center font-bold" style={{
                     width: '24px',
                     height: '24px',
-                    backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(0, 0, 0, 0.2)',
                     borderRadius: '50%',
                     fontSize: '11px',
                     border: isActive ? '1px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.1)'
                   }}>
                     {s.num || s.icon}
                   </span>
-                  <span style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em' }}>{s.label}</span>
+                  <span style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em', paddingRight: '20px' }}>{s.label}</span>
                 </div>
                 {i < arr.length - 1 && (
-                  <div className="mx-5 opacity-10" style={{ width: '35px', height: '1px', backgroundColor: 'var(--text-secondary)' }} />
+                  <div className="mx-3 opacity-20" style={{ width: '30px', height: '1px', backgroundColor: 'var(--text-secondary)' }} />
                 )}
               </div>
             );
