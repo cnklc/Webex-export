@@ -52,6 +52,7 @@ function App() {
   const [archivedRooms, setArchivedRooms] = useState<ArchivedRoom[]>([]);
   const [selectedArchiveRoom, setSelectedArchiveRoom] = useState<ArchivedRoom | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showRateWarning, setShowRateWarning] = useState(false);
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('webex_user_email') || '');
 
   // Persist email to localStorage
@@ -347,7 +348,7 @@ function App() {
                 {error && <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error-color)', fontSize: '14px' }}><AlertCircle className="w-5 h-5" /> {error}</div>}
               </div>
               <div className="flex flex-col gap-4">
-                <button className="btn-primary" onClick={fetchRooms} disabled={isLoading || !webexToken}>{isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Alanları Getir <ArrowRight className="w-5 h-5" /></>}</button>
+                <button className="btn-primary" onClick={() => setShowRateWarning(true)} disabled={isLoading || !webexToken}>{isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Alanları Getir <ArrowRight className="w-5 h-5" /></>}</button>
                 <div className="flex items-center gap-4 py-2">
                   <div className="flex-1 h-px bg-white-20"></div>
                   <span className="text-text-secondary text-xs font-bold uppercase tracking-widest opacity-50">VEYA</span>
@@ -654,6 +655,95 @@ function App() {
         </AnimatePresence>
       </main>
       
+      {/* Rate Limit Warning Modal */}
+      {showRateWarning && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px'
+          }}
+          onClick={() => setShowRateWarning(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.25 }}
+            className="glass-panel p-8 flex flex-col gap-6"
+            style={{ maxWidth: '480px', width: '100%', border: '1px solid rgba(251,191,36,0.25)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Icon + Title */}
+            <div className="flex items-start gap-4">
+              <div
+                className="flex items-center justify-center rounded-xl flex-shrink-0"
+                style={{ width: '48px', height: '48px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)' }}
+              >
+                <AlertCircle className="w-6 h-6" style={{ color: '#fbbf24' }} />
+              </div>
+              <div>
+                <h3 className="text-white font-black" style={{ fontSize: '1.2rem' }}>API Hız Sınırı Hakkında</h3>
+                <p className="text-text-secondary" style={{ fontSize: '13px', marginTop: '4px' }}>İndirme başlamadan önce lütfen okuyun</p>
+              </div>
+            </div>
+
+            {/* Info items */}
+            <div className="flex flex-col gap-3">
+              {[
+                {
+                  icon: '⏱',
+                  title: 'İndirme süresi uzun olabilir',
+                  desc: 'Büyük arşivlerde Webex API limitleri nedeniyle indirme işlemi birkaç dakika sürebilir. Bu normaldir.'
+                },
+                {
+                  icon: '🔄',
+                  title: 'Otomatik yeniden deneme',
+                  desc: 'API limiti (429) aşıldığında uygulama otomatik olarak bekler ve yeniden dener. Hiçbir şey yapmanıza gerek yok.'
+                },
+                {
+                  icon: '🚫',
+                  title: 'Sayfayı kapatmayın',
+                  desc: 'İndirme sırasında sekmeyi kapatmayın ya da sayfayı yenilemeyin. Aksi hâlde işlemi baştan başlatmak gerekir.'
+                }
+              ].map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '10px' }}
+                >
+                  <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0, marginTop: '1px' }}>{item.icon}</span>
+                  <div>
+                    <p className="text-white font-bold" style={{ fontSize: '13px' }}>{item.title}</p>
+                    <p className="text-text-secondary" style={{ fontSize: '12px', lineHeight: '1.5', marginTop: '2px' }}>{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                className="btn-secondary flex-1"
+                style={{ fontSize: '13px' }}
+                onClick={() => setShowRateWarning(false)}
+              >
+                İptal
+              </button>
+              <button
+                className="btn-primary flex-2"
+                style={{ fontSize: '14px', fontWeight: 800, flex: 2 }}
+                onClick={() => { setShowRateWarning(false); fetchRooms(); }}
+              >
+                Anladım, Devam Et <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <footer className="mt-auto py-10 text-text-secondary flex flex-col items-center gap-4 relative z-10 w-full opacity-60">
         <div className="w-full max-w-[200px] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
         <div className="flex items-center gap-2 font-black tracking-[0.2em] text-[10px] uppercase">
