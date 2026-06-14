@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
-import { WebexService, type WebexRoom } from './services/webex';
+import { WebexService, type WebexRoom, type WebexMessage } from './services/webex';
 import { downloadBlob } from './utils/downloadUtils';
 import { addRoomToZip } from './utils/zipUtils';
 import { MessageViewer } from './components/MessageViewer';
@@ -34,7 +34,7 @@ type Step = 'connect' | 'select' | 'download' | 'archive' | 'guide' | 'viewer';
 
 interface ArchivedRoom {
   room: WebexRoom;
-  messages: any[];
+  messages: WebexMessage[];
 }
 
 const pageVariants = {
@@ -74,8 +74,8 @@ function App() {
       setRooms(roomsData);
       setSelectedRoomIds([]);
       setStep('select');
-    } catch (err: any) {
-      setError(err.message || 'Alanlar alınamadı. Token\'ınızı kontrol edin.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Alanlar alınamadı. Token\'ınızı kontrol edin.');
     } finally {
       setIsLoading(false);
     }
@@ -135,7 +135,7 @@ function App() {
         const room = roomsToDownload[i];
 
         // --- Mesaj çekme aşaması ---
-        const messages: any[] = [];
+        const messages: WebexMessage[] = [];
         let pageIndex = 0;
         for await (const pagedMessages of WebexService.getMessagesPaged(webexToken, room.id)) {
           messages.push(...pagedMessages);
@@ -156,10 +156,10 @@ function App() {
         for (let j = 0; j < fileUrls.length; j++) {
           const fileUrl = fileUrls[j];
           try {
-            const fileName = fileUrl.split('/').pop() || `dosya_${Date.now()}_${j}`;
-            const blob = await WebexService.downloadFile(webexToken, fileUrl);
+            const { blob, fileName: headerName } = await WebexService.downloadFile(webexToken, fileUrl);
+            const fileName = headerName || fileUrl.split('/').pop() || `dosya_${Date.now()}_${j}`;
             downloadedFiles.push({ name: fileName, blob });
-          } catch (e) {
+          } catch {
             console.error('Dosya indirme hatası:', fileUrl);
           }
           setDownloadProgress({
@@ -185,8 +185,8 @@ function App() {
 
       setDownloadProgress({ current: 100, total: 100, status: 'Arşivleme Tamamlandı! Mesajlara göz atabilirsiniz.' });
       setStep('archive');
-    } catch (err: any) {
-      setError(err.message || 'Arşivleme başarısız oldu');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Arşivleme başarısız oldu');
       setStep('select');
     } finally {
       setIsLoading(false);
@@ -202,11 +202,12 @@ function App() {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        if (Array.isArray(json)) {
+        const parsed: unknown = JSON.parse(event.target?.result as string);
+        if (Array.isArray(parsed)) {
+          const json = parsed as WebexMessage[];
           // Derive title from unique personEmails in the messages
           const uniqueEmails: string[] = Array.from(
-            new Set(json.map((m: any) => m.personEmail).filter(Boolean))
+            new Set(json.map(m => m.personEmail).filter(Boolean))
           );
           const title = uniqueEmails.length > 0
             ? uniqueEmails.slice(0, 3).join(', ') + (uniqueEmails.length > 3 ? ` +${uniqueEmails.length - 3}` : '')
@@ -225,8 +226,8 @@ function App() {
         } else {
           throw new Error('Geçersiz JSON formatı. Mesaj listesi bekleniyor.');
         }
-      } catch (err: any) {
-        setError(err.message || 'JSON ayrıştırılamadı');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'JSON ayrıştırılamadı');
       }
     };
     reader.readAsText(file);
@@ -277,7 +278,7 @@ function App() {
             )}
           </div>
           <div className="flex flex-col">
-            <h1 className="text-white" style={{ fontSize: '2.5rem', fontWeight: 800 }}>Webex<span style={{ color: 'var(--primary-color)' }}> </span>Export</h1>
+            <h1 className="text-white" style={{ fontSize: '2.5rem', fontWeight: 800 }}>Webex <span style={{ color: 'var(--primary-color)' }}>Export</span></h1>
             <p className="text-text-secondary">Professional Archive Utility</p>
           </div>
         </div>
@@ -803,8 +804,23 @@ function App() {
         <div className="w-full max-w-[200px] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
         <div className="flex items-center gap-2 font-black tracking-[0.2em] text-[10px] uppercase">
           <span>Created by</span>
-          <span className="text-primary-color px-2 py-0.5 rounded border border-primary-color/20 bg-primary-color/5">Can</span>
+          <a
+            href="https://github.com/cnklc"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary-color px-2 py-0.5 rounded border border-primary-color/20 bg-primary-color/5 hover-bg-white-5 transition-colors"
+          >
+            Can Kılıç
+          </a>
         </div>
+        <a
+          href="https://github.com/cnklc/Webex-export"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-text-secondary hover-text-primary transition-colors text-[11px] font-semibold"
+        >
+          <ExternalLink size={14} /> github.com/cnklc/Webex-export
+        </a>
       </footer>
     </div>
   );

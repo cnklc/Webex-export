@@ -23,7 +23,7 @@ Professional, glassmorphic React application to archive and view Webex conversat
 - **Icons**: Lucide React
 - **Dependencies**: 
   - `jszip`: For client-side archive generation.
-  - `webex-api`: Direct fetch calls with retry logic.
+  - Native `fetch` with built-in retry & rate-limit handling against the Webex REST API (`webexapis.com`).
 
 ## 🚀 Getting Started
 
@@ -35,8 +35,8 @@ Professional, glassmorphic React application to archive and view Webex conversat
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/webex-to-teams.git
-   cd webex-to-teams
+   git clone https://github.com/cnklc/Webex-export.git
+   cd Webex-export
    ```
 2. Install dependencies:
    ```bash
@@ -58,5 +58,10 @@ Professional, glassmorphic React application to archive and view Webex conversat
 ## 🛡️ Privacy & Security
 Everything happens on the **client-side**. Your Webex token is never sent to any server other than Webex's official API (`webexapis.com`). Data is processed directly in your browser.
 
+## 🔗 Links
+
+- **Repository**: [github.com/cnklc/Webex-export](https://github.com/cnklc/Webex-export)
+- **Author**: [Can Kılıç](https://github.com/cnklc)
+
 ---
-Created with ❤️ by **Can**
+Created with ❤️ by **[Can Kılıç](https://github.com/cnklc)**

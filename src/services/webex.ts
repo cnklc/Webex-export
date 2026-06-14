@@ -21,19 +21,35 @@ export interface WebexMessage {
   files?: string[];
 }
 
-export interface WebexPerson {
-  id: string;
-  emails: string[];
-  displayName: string;
-}
-
 const BASE_URL = 'https://webexapis.com/v1';
+
+/**
+ * Extracts the original file name from a Content-Disposition header.
+ * Falls back to null when the header is absent or unreadable (e.g. when the
+ * browser does not expose it for a cross-origin response).
+ */
+function parseContentDispositionFilename(header: string | null): string | null {
+  if (!header) return null;
+
+  // RFC 5987 encoded form: filename*=UTF-8''my%20file.png
+  const encodedMatch = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+  if (encodedMatch) {
+    try {
+      return decodeURIComponent(encodedMatch[1].replace(/["']/g, '').trim());
+    } catch {
+      // fall through to the plain form
+    }
+  }
+
+  const plainMatch = header.match(/filename="?([^";]+)"?/i);
+  return plainMatch ? plainMatch[1].trim() : null;
+}
 
 /**
  * Handles Webex API limits (429) and transient errors.
  */
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 5): Promise<Response> {
-  let lastError: any;
+  let lastError: unknown;
   
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -69,17 +85,6 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 5)
 }
 
 export const WebexService = {
-  async getMe(token: string): Promise<WebexPerson> {
-    const response = await fetchWithRetry(`${BASE_URL}/people/me`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!response.ok) {
-      if (response.status === 401) throw new Error('Geçersiz Webex Token');
-      throw new Error('Kullanıcı profili alınamadı');
-    }
-    return response.json();
-  },
-
   async *getRoomsPaged(token: string): AsyncGenerator<WebexRoom[]> {
     let nextUrl: string | null = `${BASE_URL}/rooms?max=1000`;
 
@@ -124,19 +129,14 @@ export const WebexService = {
     }
   },
 
-  async getMessages(token: string, roomId: string): Promise<WebexMessage[]> {
-    let messages: WebexMessage[] = [];
-    for await (const items of this.getMessagesPaged(token, roomId)) {
-      messages = [...messages, ...items];
-    }
-    return messages;
-  },
-
-  async downloadFile(token: string, fileUrl: string): Promise<Blob> {
+  async downloadFile(token: string, fileUrl: string): Promise<{ blob: Blob; fileName: string | null }> {
     const response = await fetchWithRetry(fileUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!response.ok) throw new Error('Dosya indirilemedi');
-    return response.blob();
+
+    const fileName = parseContentDispositionFilename(response.headers.get('Content-Disposition'));
+    const blob = await response.blob();
+    return { blob, fileName };
   }
 };
