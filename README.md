@@ -58,6 +58,18 @@ Professional, glassmorphic React application to archive and view Webex conversat
 ## 🛡️ Privacy & Security
 Everything happens on the **client-side**. Your Webex token is never sent to any server other than Webex's official API (`webexapis.com`). Data is processed directly in your browser.
 
+## 🚀 Deployment (GitHub Pages)
+
+This project is configured to deploy automatically to GitHub Pages via GitHub Actions.
+
+1. Push the project to the `main` branch of `github.com/cnklc/Webex-export`.
+2. In the repository, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+3. Every push to `main` builds the app and publishes it. The workflow lives in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+
+> The Vite `base` is set to `/Webex-export/` in [`vite.config.ts`](vite.config.ts) so asset URLs resolve correctly. If you rename the repository, update this value to match.
+
+**Live URL:** https://cnklc.github.io/Webex-export/
+
 ## 🔗 Links
 
 - **Repository**: [github.com/cnklc/Webex-export](https://github.com/cnklc/Webex-export)
