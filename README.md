@@ -66,9 +66,9 @@ This project is configured to deploy automatically to GitHub Pages via GitHub Ac
 2. In the repository, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
 3. Every push to `main` builds the app and publishes it. The workflow lives in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
-> The Vite `base` is set to `/Webex-export/` in [`vite.config.ts`](vite.config.ts) so asset URLs resolve correctly. If you rename the repository, update this value to match.
+> Served from the custom domain **webex.cnklc.me**, so the Vite `base` in [`vite.config.ts`](vite.config.ts) is `/`. The custom domain is kept across deployments via [`public/CNAME`](public/CNAME) (copied into the build output). If you drop the custom domain and serve from the project path, change `base` to `/Webex-export/` instead.
 
-**Live URL:** https://cnklc.github.io/Webex-export/
+**Live URL:** https://webex.cnklc.me/
 
 ## 🔗 Links
 
